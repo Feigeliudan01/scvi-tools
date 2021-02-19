@@ -3,17 +3,17 @@ import logging
 import os
 import pickle
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence, Callable, List
+from typing import Callable, List, Optional, Sequence
 
 import numpy as np
 import pyro
 import pytorch_lightning as pl
 import rich
 import torch
-from torch.utils.data import DataLoader
 from anndata import AnnData
 from rich.text import Text
 from sklearn.model_selection._split import _validate_shuffle_split
+from torch.utils.data import DataLoader
 
 from scvi import _CONSTANTS, settings
 from scvi.compose import PyroBaseModuleClass

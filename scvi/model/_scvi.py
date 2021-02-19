@@ -1,8 +1,8 @@
 import logging
-import numpy as np
-
-from anndata import AnnData
 from typing import Optional
+
+import numpy as np
+from anndata import AnnData
 
 from scvi._compat import Literal
 from scvi.dataloaders import AnnDataLoader
