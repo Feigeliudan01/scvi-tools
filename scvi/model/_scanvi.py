@@ -12,7 +12,7 @@ from scvi import _CONSTANTS, settings
 from scvi._compat import Literal
 from scvi.data._anndata import _make_obs_column_categorical
 from scvi.dataloaders import AnnDataLoader, SemiSupervisedDataLoader
-from scvi.lightning import SemiSupervisedTrainingPlan, Trainer
+from scvi.lightning import SemiSupervisedTrainingPlan
 from scvi.lightning._callbacks import SubSampleLabels
 from scvi.model._scvi import SCVI
 from scvi.modules import SCANVAE
