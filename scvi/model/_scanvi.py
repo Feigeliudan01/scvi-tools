@@ -423,6 +423,7 @@ class SCANVI(RNASeqMixin, VAEMixin, ArchesMixin, BaseModelClass):
             return n_train, n_val
 
         if n_labeled_idx != 0:
+            np.random.seed(seed=settings.seed)
             n_labeled_train, n_labeled_val = get_train_val_split(
                 n_labeled_idx, validation_size, train_size
             )
@@ -440,6 +441,7 @@ class SCANVI(RNASeqMixin, VAEMixin, ArchesMixin, BaseModelClass):
             labeled_idx_val = []
 
         if n_unlabeled_idx != 0:
+            np.random.seed(seed=settings.seed)
             n_unlabeled_train, n_unlabeled_val = get_train_val_split(
                 n_unlabeled_idx, validation_size, train_size
             )
