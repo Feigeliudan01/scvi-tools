@@ -1,6 +1,8 @@
 import logging
 
 from anndata import AnnData
+from typing import Optional
+import pytorch_lightning as pl
 
 from scvi._compat import Literal
 from scvi.dataloaders import AnnDataLoader
@@ -117,6 +119,30 @@ class SCVI(RNASeqMixin, VAEMixin, ArchesMixin, BaseModelClass):
             latent_distribution,
         )
         self.init_params_ = self._get_init_params(locals())
+
+    def train(
+        self,
+        max_epochs: Optional[int] = None,
+        use_gpu: Optional[bool] = None,
+        train_size: float = 0.9,
+        validation_size: Optional[float] = None,
+        batch_size: int = 128,
+        plan_kwargs: Optional[dict] = None,
+        **kwargs,
+    ):
+        if max_epochs is None:
+            n_cells = self.adata.n_obs
+            max_epochs = np.min([round((20000 / n_cells) * 400), 400])
+
+        super().train(
+            max_epochs=max_epochs,
+            use_gpu=use_gpu,
+            train_size=train_size,
+            validation_size=validation_size,
+            batch_size=batch_size,
+            plan_kwargs=plan_kwargs,
+            **kwargs,
+        )
 
     @property
     def _plan_class(self):

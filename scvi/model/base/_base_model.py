@@ -3,13 +3,14 @@ import logging
 import os
 import pickle
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Callable, List
 
 import numpy as np
 import pyro
 import pytorch_lightning as pl
 import rich
 import torch
+from torch.utils.data import DataLoader
 from anndata import AnnData
 from rich.text import Text
 from sklearn.model_selection._split import _validate_shuffle_split
@@ -47,13 +48,13 @@ class BaseModelClass(ABC):
         self.validation_indices_ = None
         self.history_ = None
 
-    def _make_scvi_dl(
+    def _make_data_loader(
         self,
         adata: AnnData,
         indices: Optional[Sequence[int]] = None,
         batch_size: Optional[int] = None,
         shuffle: bool = False,
-        scvi_dl_class=None,
+        data_loader_class: Optional[DataLoader] = None,
         **data_loader_kwargs,
     ):
         """
@@ -70,6 +71,8 @@ class BaseModelClass(ABC):
             Minibatch size for data loading into model. Defaults to `scvi.settings.batch_size`.
         shuffle
             Whether observations are shuffled each iteration though
+        data_loader_class
+            Class of the dataloader to create. If None, uses _data_loader_cls attribute from self.
         data_loader_kwargs
             Kwargs to the class-specific data loader class
         """
@@ -77,13 +80,13 @@ class BaseModelClass(ABC):
             batch_size = settings.batch_size
         if indices is None:
             indices = np.arange(adata.n_obs)
-        if scvi_dl_class is None:
-            scvi_dl_class = self._data_loader_cls
+        if data_loader_class is None:
+            data_loader_class = self._data_loader_cls
 
         if "num_workers" not in data_loader_kwargs:
             data_loader_kwargs.update({"num_workers": settings.dl_num_workers})
 
-        dl = scvi_dl_class(
+        dl = data_loader_class(
             adata,
             shuffle=shuffle,
             indices=indices,
@@ -113,7 +116,7 @@ class BaseModelClass(ABC):
         validation_size
             float, or None (default is None)
         **kwargs
-            Keyword args for `_make_scvi_dl()`
+            Keyword args for `_make_data_loader()`
         """
         train_size = float(train_size)
         if train_size > 1.0 or train_size <= 0.0:
@@ -140,13 +143,13 @@ class BaseModelClass(ABC):
 
         # do not remove drop_last=3, skips over small minibatches
         return (
-            self._make_scvi_dl(
+            self._make_data_loader(
                 adata, indices=indices_train, shuffle=True, drop_last=3, **kwargs
             ),
-            self._make_scvi_dl(
+            self._make_data_loader(
                 adata, indices=indices_validation, shuffle=True, drop_last=3, **kwargs
             ),
-            self._make_scvi_dl(
+            self._make_data_loader(
                 adata, indices=indices_test, shuffle=True, drop_last=3, **kwargs
             ),
         )
@@ -240,7 +243,7 @@ class BaseModelClass(ABC):
             k: v for (k, v) in all_params.items() if not isinstance(v, AnnData)
         }
         # not very efficient but is explicit
-        # seperates variable params (**kwargs) from non variable params into two dicts
+        # separates variable params (**kwargs) from non variable params into two dicts
         non_var_params = [p.name for p in parameters if p.kind != p.VAR_KEYWORD]
         non_var_params = {k: v for (k, v) in all_params.items() if k in non_var_params}
         var_params = [p.name for p in parameters if p.kind == p.VAR_KEYWORD]
@@ -252,13 +255,16 @@ class BaseModelClass(ABC):
 
     def train(
         self,
-        max_epochs: Optional[int] = None,
+        max_epochs: Optional[int] = 400,
         use_gpu: Optional[bool] = None,
         train_size: float = 0.9,
         validation_size: Optional[float] = None,
         batch_size: int = 128,
-        plan_kwargs: Optional[dict] = None,
         plan_class: Optional[pl.LightningModule] = None,
+        plan_kwargs: Optional[dict] = None,
+        train_test_val_func: Optional[Callable] = None,
+        train_test_val_kwargs: Optional[dict] = None,
+        trainer_callbacks: List[Callable] = [],
         **kwargs,
     ):
         """
@@ -295,21 +301,27 @@ class BaseModelClass(ABC):
             True if (settings.dl_pin_memory_gpu_training and use_gpu) else False
         )
 
-        if max_epochs is None:
-            n_cells = self.adata.n_obs
-            max_epochs = np.min([round((20000 / n_cells) * 400), 400])
+        train_test_val_func = (
+            self._train_test_val_split
+            if train_test_val_func is None
+            else train_test_val_func
+        )
+        train_test_val_kwargs = (
+            train_test_val_kwargs if isinstance(train_test_val_kwargs, dict) else dict()
+        )
 
         self.trainer = Trainer(
             max_epochs=max_epochs,
             gpus=gpus,
             **kwargs,
         )
-        train_dl, val_dl, test_dl = self._train_test_val_split(
+        train_dl, val_dl, test_dl = train_test_val_func(
             self.adata,
             train_size=train_size,
             validation_size=validation_size,
             pin_memory=pin_memory,
             batch_size=batch_size,
+            **train_test_val_kwargs,
         )
         self.train_indices_ = train_dl.indices
         self.test_indices_ = test_dl.indices
